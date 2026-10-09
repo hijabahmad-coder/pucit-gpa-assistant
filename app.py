@@ -3,8 +3,7 @@ import streamlit as st
 from langchain_core.messages import HumanMessage, AIMessage
 from agents import ask
 from guards import check_input, MAX_REQUESTS_PER_SESSION
-
-st.set_page_config(page_title="PUCIT GPA Assistant", page_icon="🎓")
+st.set_page_config(page_title="PUCIT GPA Assistant")
 
 # ---------- styling (dark green sidebar, light chat area) ----------
 st.markdown(
@@ -36,9 +35,9 @@ if "pending_prompt" not in st.session_state:
     st.session_state.pending_prompt = None
 
 QUICK_ACTIONS = {
-    "🧮 Calculate GPA": "I want to calculate my semester GPA.",
-    "🎯 Plan a target CGPA": "I want to reach a target CGPA. Help me plan.",
-    "📖 Check course info": "I want to see the courses and credit hours of a semester.",
+    "Calculate GPA": "I want to calculate my semester GPA.",
+    "Plan a target CGPA": "I want to reach a target CGPA. Help me plan.",
+    "Check course info": "I want to see the courses and credit hours of a semester.",
 }
 
 
@@ -57,10 +56,10 @@ def saved_reports(messages):
 
 # ---------- sidebar ----------
 with st.sidebar:
-    st.markdown("## 🎓 GPA Assistant")
-    st.caption("Plan · Calculate · Improve")
+    st.markdown("### GPA Assistant")
+    st.caption("Plan, calculate, improve")
 
-    if st.button("➕ New chat"):
+    if st.button("New chat"):
         st.session_state.messages = []
         st.rerun()
 
@@ -73,23 +72,23 @@ with st.sidebar:
     if reports:
         st.markdown("**Saved reports**")
         for i, (name, content) in enumerate(reports):
-            st.download_button(f"⬇ {name}", content, file_name=name, mime="text/plain", key=f"dl_{i}")
+            st.download_button(f"{name}", content, file_name=name, mime="text/plain", key=f"dl_{i}")
 
     left = max(MAX_REQUESTS_PER_SESSION - st.session_state.request_count, 0)
     st.caption(f"Messages left this session: {left}/{MAX_REQUESTS_PER_SESSION}")
     st.caption("Unofficial student project, not affiliated with PUCIT. Verify grades and course data with the official policy.")
 
 # ---------- main ----------
-st.title("🎓 PUCIT GPA/CGPA Assistant")
+st.title("PUCIT GPA/CGPA Assistant")
 
 if not st.session_state.messages:
     with st.chat_message("assistant"):
         st.markdown(
             "Hi! I'm your GPA assistant. I can:\n"
-            "- ✅ Convert marks to grade points and calculate your semester GPA\n"
-            "- ✅ Project your new CGPA after a semester\n"
-            "- ✅ Find the GPA you need to reach a target CGPA\n"
-            "- ✅ Show semester courses and remaining credit hours\n\n"
+            "- Convert marks to grade points and calculate your semester GPA\n"
+            "- Project your new CGPA after a semester\n"
+            "- Find the GPA you need to reach a target CGPA\n"
+            "- Show semester courses and remaining credit hours\n\n"
             "Every number comes from a calculation tool, not from the model. "
             "Pick a quick action or just type below."
         )
