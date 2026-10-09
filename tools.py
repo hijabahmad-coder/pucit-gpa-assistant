@@ -136,6 +136,28 @@ COURSES = {
         ("GE-363", "Civics and Community Engagement", 2.0),
         ("HQ-008", "Quran Translation - VIII", 0.5)],
 }
+PREREQS = {
+    # Sem 3
+    "CC-211": ["CC-112"], "CC-211-L": ["CC-112"],
+    "CC-215": ["CC-112"], "CC-215-L": ["CC-112"],
+    "CC-210": ["CC-110"],
+    # Sem 4
+    "CC-213": ["CC-211"], "CC-213-L": ["CC-211"],
+    "DC-220": ["CC-215"],       
+    # Sem 5
+    "CC-313": ["CC-213"], "CC-310": ["CC-213"],
+    "DC-322": ["CC-210"],
+    # Sem 6
+    "EC-333": ["CC-211"], "MS-253": ["GE-162"],
+    # Sem 7
+    "DC-328": ["CC-311"], "EC-425": ["CC-212"],
+    # Sem 8
+    "CC-412": ["CC-411"], "DC-421": ["DC-320"],
+}
+def check_prerequisites(course_code: str, passed_codes: list[str]) -> str:
+    """Check whether prerequisites of a course are passed. Use before suggesting a course to take or retake."""
+    missing = [p for p in PREREQS.get(course_code.upper(), []) if p not in {c.upper() for c in passed_codes}]
+    return "OK" if not missing else f"Missing prerequisites: {', '.join(missing)}"
 
 
 def get_semester_courses(semester: int) -> str:
@@ -147,6 +169,35 @@ def get_semester_courses(semester: int) -> str:
         lines.append(f"{code} - {name} ({credit})")
     return "\n".join(lines)
 
+def get_completed_credit_hours(through_semester: int, dropped_codes: list[str] | None = None) -> float:
+    """Credit hours completed through a semester, minus any dropped course codes (e.g. ['CC-213'])."""
+    if through_semester < 0 or through_semester > 8:
+        return "Error: semester must be between 0 and 8."
+    dropped = {c.upper() for c in (dropped_codes or [])}
+    total = 0.0
+    for s in range(1, through_semester + 1):
+        for code, _name, credit in COURSES[s]:
+            if code not in dropped:
+                total += credit
+    return total
+
+def calculate_new_cgpa_with_retakes(current_cgpa: float, completed_credit_hours: float,
+                                    semester_gpa: float, semester_credit_hours: float,
+                                    old_grade_points: list[float], retake_credit_hours: list[float]) -> float:
+    """New CGPA when the semester includes retaken courses. The new grade replaces the old one; retake hours are not counted twice."""
+    if len(old_grade_points) != len(retake_credit_hours):
+        return "Error: lists must be the same length."
+    if not (0 <= current_cgpa <= 4) or not (0 <= semester_gpa <= 4):
+        return "Error: CGPA and GPA must be between 0 and 4."
+    if any(g < 0 or g > 4 for g in old_grade_points) or any(c <= 0 for c in retake_credit_hours):
+        return "Error: invalid retake values."
+    total_hours = completed_credit_hours + semester_credit_hours - sum(retake_credit_hours)
+    if total_hours <= 0:
+        return "Error: total credit hours must be positive."
+    points = (current_cgpa * completed_credit_hours
+              + semester_gpa * semester_credit_hours
+              - sum(g * c for g, c in zip(old_grade_points, retake_credit_hours)))
+    return points / total_hours
 
 def get_remaining_credit_hours(current_semester: int, through_semester: int = 8) -> float:
     """Return the total credit hours of the semesters AFTER current_semester, up to and including through_semester (default 8 = the end of the degree). Use this when the student wants to know remaining credit hours, or to test a window of semesters when a target is unreachable."""
