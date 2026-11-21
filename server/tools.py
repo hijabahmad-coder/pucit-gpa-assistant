@@ -6,7 +6,7 @@ REPORT_DIR = "reports"
 MAX_REPORT_CHARS = 5000
 
 
-def marks_to_grade_points(marks: int) -> float:
+def marks_to_grade_points(marks: int) -> float | str:
     """Convert course marks (0-100) into grade points. Use this whenever the student gives marks for a course."""
     if marks < 0 or marks > 100:
         return "Error: marks must be between 0 and 100."
@@ -32,7 +32,7 @@ def marks_to_grade_points(marks: int) -> float:
         return 0.0
 
 
-def calculate_semester_gpa(grade_points: list[float], credit_hours: list[float]) -> float:
+def calculate_semester_gpa(grade_points: list[float], credit_hours: list[float]) -> float | str:
     """Calculate semester GPA from lists of grade points and credit hours. Use after converting marks to grade points."""
     if len(grade_points) != len(credit_hours) or not grade_points:
         return "Error: lists must be non-empty and the same length."
@@ -44,7 +44,7 @@ def calculate_semester_gpa(grade_points: list[float], credit_hours: list[float])
 
 
 def calculate_new_cgpa(current_cgpa: float, completed_credit_hours: float,
-                       semester_gpa: float, semester_credit_hours: float) -> float:
+                       semester_gpa: float, semester_credit_hours: float) -> float | str:
     """Calculate the new CGPA after a semester. Use when the student wants to know their updated CGPA."""
     if not (0 <= current_cgpa <= 4) or not (0 <= semester_gpa <= 4):
         return "Error: CGPA and GPA must be between 0 and 4."
@@ -58,7 +58,7 @@ def calculate_new_cgpa(current_cgpa: float, completed_credit_hours: float,
 
 
 def required_gpa_for_target(target_cgpa: float, current_cgpa: float,
-                            completed_credit_hours: float, remaining_credit_hours: float) -> float:
+                            completed_credit_hours: float, remaining_credit_hours: float) -> float | str:
     """Calculate the GPA needed over the remaining credit hours to reach a target CGPA. Do not cap at 4.0."""
     if not (0 <= target_cgpa <= 4) or not (0 <= current_cgpa <= 4):
         return "Error: CGPA values must be between 0 and 4."
@@ -169,7 +169,7 @@ def get_semester_courses(semester: int) -> str:
         lines.append(f"{code} - {name} ({credit})")
     return "\n".join(lines)
 
-def get_completed_credit_hours(through_semester: int, dropped_codes: list[str] | None = None) -> float:
+def get_completed_credit_hours(through_semester: int, dropped_codes: list[str] | None = None) -> float | str:
     """Credit hours completed through a semester, minus any dropped course codes (e.g. ['CC-213'])."""
     if through_semester < 0 or through_semester > 8:
         return "Error: semester must be between 0 and 8."
@@ -183,7 +183,7 @@ def get_completed_credit_hours(through_semester: int, dropped_codes: list[str] |
 
 def calculate_new_cgpa_with_retakes(current_cgpa: float, completed_credit_hours: float,
                                     semester_gpa: float, semester_credit_hours: float,
-                                    old_grade_points: list[float], retake_credit_hours: list[float]) -> float:
+                                    old_grade_points: list[float], retake_credit_hours: list[float]) -> float | str:
     """New CGPA when the semester includes retaken courses. The new grade replaces the old one; retake hours are not counted twice."""
     if len(old_grade_points) != len(retake_credit_hours):
         return "Error: lists must be the same length."
@@ -199,7 +199,7 @@ def calculate_new_cgpa_with_retakes(current_cgpa: float, completed_credit_hours:
               - sum(g * c for g, c in zip(old_grade_points, retake_credit_hours)))
     return points / total_hours
 
-def get_remaining_credit_hours(current_semester: int, through_semester: int = 8) -> float:
+def get_remaining_credit_hours(current_semester: int, through_semester: int = 8) -> float | str:
     """Return the total credit hours of the semesters AFTER current_semester, up to and including through_semester (default 8 = the end of the degree). Use this when the student wants to know remaining credit hours, or to test a window of semesters when a target is unreachable."""
     if current_semester < 1 or current_semester > 8:
         return "Error: semester must be between 1 and 8."
