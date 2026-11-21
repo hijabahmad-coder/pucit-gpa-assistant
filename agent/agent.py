@@ -89,24 +89,59 @@ async def ask_name(memory):
     return name or "guest"
 
 
+def make_config(thread):
+    return {"configurable": {"thread_id": thread}, "recursion_limit": 15}
+
+
+async def show_history(agent, thread):
+    """Local read of the saved chat. Never touches the network or the model."""
+    state = await agent.aget_state(make_config(thread))
+    shown = 0
+    for m in state.values.get("messages", []):
+        if m.type in ("human", "ai") and m.text:
+            print(("You: " if m.type == "human" else "Agent: ") + m.text)
+            shown += 1
+    if not shown:
+        print("(no saved messages yet)")
+
+
+async def run_command(cmd, agent, memory, thread):
+    """Handles /switch, /history, /forget. Returns the (possibly new) thread id."""
+    if cmd == "/switch":
+        thread = await ask_name(memory)
+        print(f"Switched to {thread}.")
+    elif cmd == "/history":
+        await show_history(agent, thread)
+    elif cmd == "/forget":
+        sure = await asyncio.to_thread(input, f"Delete all saved history of '{thread}'? (y/n) ")
+        if sure.strip().lower() == "y":
+            await memory.adelete_thread(thread)
+            print("History deleted.")
+    else:
+        print("Commands: /switch  /history  /forget  exit")
+    return thread
+
+
 async def main():
     tools = await load_mcp_tools()
     async with AsyncSqliteSaver.from_conn_string(DB_PATH) as memory:
         agent = create_agent(model, tools=tools + [save_report],
                              system_prompt=SYSTEM_PROMPT, checkpointer=memory)
         thread = await ask_name(memory)
-        config = {"configurable": {"thread_id": thread}, "recursion_limit": 15}
-        print(f"Hi {thread}! Type 'exit' to quit.")
+        print(f"Hi {thread}! Commands: /switch /history /forget, or 'exit'.")
         while True:
-            user_input = await asyncio.to_thread(input, f"{thread}: ")
-            if user_input.strip().lower() in ("exit", "quit"):
+            user_input = (await asyncio.to_thread(input, f"{thread}: ")).strip()
+            if user_input.lower() in ("exit", "quit"):
                 break
+            if user_input.startswith("/"):
+                thread = await run_command(user_input.lower(), agent, memory, thread)
+                continue
             ok, msg = check_input(user_input)
             if not ok:
                 print("Agent:", msg)
                 continue
             # only the NEW message is sent; the checkpointer loads the rest of this thread
-            result = await agent.ainvoke({"messages": [HumanMessage(user_input)]}, config)
+            result = await agent.ainvoke({"messages": [HumanMessage(user_input)]}, make_config(thread))
             print("Agent:", result["messages"][-1].text)
 
 
