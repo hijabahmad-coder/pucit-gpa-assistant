@@ -2,7 +2,7 @@
 
 This project is a small LLM agent, so it is treated as an LLM application, not just a script.
 **The system prompt is not a security boundary.** A model can be talked out of its prompt, so the real
-protection lives in code (`tools.py`, `guards.py`); the prompt is only an extra layer.
+protection lives in code (`server/tools.py`, `agent/guards.py`); the prompt is only an extra layer.
 
 ## Threat model (OWASP Top 10 for LLM Applications)
 
