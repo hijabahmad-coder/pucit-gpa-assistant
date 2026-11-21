@@ -1,7 +1,10 @@
 """MCP server: exposes the GPA/CGPA tools over HTTP. save_report stays on the agent side."""
 import os
+import sys
+
 
 from fastmcp import FastMCP
+sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 
 from tools import (
     marks_to_grade_points, calculate_semester_gpa, calculate_new_cgpa,
