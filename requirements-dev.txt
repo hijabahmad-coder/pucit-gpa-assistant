@@ -1,1 +1,4 @@
+-r server/requirements.txt
+-r agent/requirements.txt
 pytest
+pytest-asyncio

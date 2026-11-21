@@ -1,6 +1,0 @@
-# Replace with exact versions from your working environment before release:
-#   pip freeze | findstr /i "langchain groq streamlit dotenv" > requirements.txt
-langchain>=1.0
-langchain-groq
-python-dotenv
-streamlit

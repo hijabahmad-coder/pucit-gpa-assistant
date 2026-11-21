@@ -16,3 +16,6 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# chat memory database
+chats.db*
