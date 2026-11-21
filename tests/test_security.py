@@ -1,7 +1,7 @@
 """Security regression tests: path traversal, size limits, input guard."""
 import os
 import pytest
-import tools
+import local_tools as tools
 from guards import check_input, MAX_INPUT_CHARS
 
 
