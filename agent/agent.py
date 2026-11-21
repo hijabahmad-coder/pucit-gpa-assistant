@@ -1,19 +1,19 @@
+"""CGPA Guider agent: tools come from the MCP server, everything is async."""
+import asyncio
+import os
+
+from dotenv import load_dotenv
 from langchain.agents import create_agent
+from langchain.mcp import MCPAdapter
 from langchain_core.messages import HumanMessage
+
+from guards import check_input
 from llm import model
-from guards import check_input, MAX_REQUESTS_PER_SESSION
-from tools import (
-    marks_to_grade_points,
-    calculate_semester_gpa,
-    calculate_new_cgpa,
-    required_gpa_for_target,
-    get_semester_courses,
-    get_remaining_credit_hours,
-    save_report,
-    calculate_new_cgpa_with_retakes,
-    get_completed_credit_hours,
-    check_prerequisites
-)
+from local_tools import save_report
+
+load_dotenv()
+MCP_URL = os.getenv("MCP_URL", "http://127.0.0.1:8000/mcp")
+MCP_KEY = os.getenv("MCP_KEY")  # only needed if the hosted server asks for a key
 
 SYSTEM_PROMPT = """You are a GPA and CGPA assistant for a PUCIT BS(CS) student.
 
@@ -48,7 +48,7 @@ When the student gives a target CGPA, ALWAYS start with the smallest window, onl
 - Then tell the student which horizon works, as advice.
 Example: Semester V, CGPA 3.0, 64 credit hours completed, target 3.4. Semester V only: 18.5 hours, 4.78 (impossible). Semesters V-VI: 37.0 hours, 4.09 (impossible). Semesters V-VII: 55.5 hours, 3.86 (achievable). Advise the student that they need about 3.86 across semesters V to VII.
 A student in semester N has completed semesters 1 to N-1. To test a window that ends at semester k, call get_remaining_credit_hours(current_semester=N-1, through_semester=k). Start with k=N, then k=N+1, then k=N+2, and call required_gpa_for_target for each window until the result is 4.0 or below. Never add or subtract hours yourself.
--Before suggesting a retake or a course, call check_prerequisites.
+- Before suggesting a retake or a course, call check_prerequisites.
 
 
 HOW TO WORK:
@@ -57,63 +57,36 @@ HOW TO WORK:
 - Only report numbers that a tool returned. Do not show any extra calculation of your own.
 """
 
-agent = create_agent(
-    model=model,
-    tools=[
-        marks_to_grade_points,
-        calculate_semester_gpa,
-        calculate_new_cgpa,
-        required_gpa_for_target,
-        get_semester_courses,
-        get_remaining_credit_hours,
-        save_report,
-        get_completed_credit_hours,
-        calculate_new_cgpa_with_retakes,
-        check_prerequisites
-    ],
-    system_prompt=SYSTEM_PROMPT,
-)
+def mcp_config():
+    server = {"url": MCP_URL, "transport": "http"}
+    if MCP_KEY:
+        server["headers"] = {"Authorization": f"Bearer {MCP_KEY}"}
+    return {"mcpServers": {"cgpa": server}}
 
 
-def ask(messages):
-    """Call the agent, retrying up to 3 times if the model call fails."""
-    for attempt in range(3):
-        try:
-            return agent.invoke(
-                {"messages": messages},
-                config={"recursion_limit": 15},  # tool-loop cap
-            )
-        except Exception as e:
-            # log only the error type, never the raw message (may leak internals)
-            print(f"Model error ({type(e).__name__}), retrying ({attempt + 1}/3)...")
-    return None
+async def load_mcp_tools():
+    async with MCPAdapter(mcp_config()) as adapter:
+        return await adapter.list_tools()
 
 
-def main():
-    messages = []  # full conversation history, we carry it ourselves
-    requests_made = 0
+async def main():
+    tools = await load_mcp_tools()
+    agent = create_agent(model, tools=tools + [save_report], system_prompt=SYSTEM_PROMPT)
+    messages = []
     print("GPA assistant ready. Type 'exit' to quit.")
     while True:
-        user_input = input("You: ")
+        user_input = await asyncio.to_thread(input, "You: ")
         if user_input.strip().lower() in ("exit", "quit"):
-            break
-        if requests_made >= MAX_REQUESTS_PER_SESSION:
-            print("Session limit reached. Please restart the program.")
             break
         ok, msg = check_input(user_input)
         if not ok:
             print("Agent:", msg)
             continue
-        requests_made += 1
         messages.append(HumanMessage(content=user_input))
-        result = ask(messages)
-        if result is None:
-            print("Sorry, the model failed. Please repeat your message.")
-            messages.pop()  # drop the failed question so history stays clean
-            continue
-        messages = result["messages"]  # replace with the updated history
-        print("Agent:", messages[-1].content)
+        result = await agent.ainvoke({"messages": messages}, config={"recursion_limit": 15})
+        messages = result["messages"]
+        print("Agent:", messages[-1].text)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

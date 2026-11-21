@@ -2,7 +2,7 @@
 import re
 
 MAX_INPUT_CHARS = 1000
-MAX_REQUESTS_PER_SESSION = 30
+MAX_REQUESTS_PER_SESSION = 30  # unused since the Streamlit UI was retired
 
 PATTERNS = [
     r"ignore (all |any )?(previous|prior|above) (instructions|rules)",
