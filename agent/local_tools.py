@@ -2,6 +2,8 @@
 import os
 import re
 
+from langchain.tools import ToolRuntime, tool
+
 REPORT_DIR = "reports"
 MAX_REPORT_CHARS = 5000
 
@@ -20,3 +22,10 @@ def save_report(filename: str, content: str) -> str:
         return f"Saved as {safe}.txt"
     except Exception:
         return "Error: could not save file."
+
+
+@tool
+def history(runtime: ToolRuntime) -> str:
+    """List what the student asked earlier in this chat. Runs locally, so it works even when the MCP server is down."""
+    asked = [m.text for m in runtime.state["messages"] if m.type == "human"]
+    return "\n".join(f"{i}. {q}" for i, q in enumerate(asked, 1)) or "No earlier messages."

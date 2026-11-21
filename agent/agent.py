@@ -4,13 +4,14 @@ import os
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
+from langchain.agents.middleware import wrap_tool_call
 from langchain.mcp import MCPAdapter
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from guards import check_input
 from llm import model
-from local_tools import save_report
+from local_tools import history, save_report
 
 load_dotenv()
 MCP_URL = os.getenv("MCP_URL", "http://127.0.0.1:8000/mcp")
@@ -54,6 +55,7 @@ A student in semester N has completed semesters 1 to N-1. To test a window that 
 
 
 HOW TO WORK:
+- If a tool returns an error saying the server is unreachable, tell the student the calculation server is down. Do not calculate yourself. They can still use the history tool or the /history command.
 - When marks are given for several courses, call marks_to_grade_points once for each course.
 - Use get_semester_courses for course lists, but only once the student has told you the semester.
 - Only report numbers that a tool returned. Do not show any extra calculation of your own.
@@ -69,6 +71,35 @@ def mcp_config():
 async def load_mcp_tools():
     async with MCPAdapter(mcp_config()) as adapter:
         return await adapter.list_tools()
+
+
+async def safe_load_tools():
+    """MCP tools if the server answers, otherwise no tools (the agent still starts with local tools)."""
+    try:
+        return await load_mcp_tools()
+    except Exception as e:
+        print(f"[MCP server unreachable ({type(e).__name__}). Only local tools: history, save_report.]")
+        return []
+
+
+@wrap_tool_call
+async def survive_tool_errors(request, handler):
+    """A dead server becomes a normal tool result, so the chat keeps going and history stays consistent."""
+    try:
+        return await handler(request)
+    except Exception as e:
+        print(f"  [tool failed: {type(e).__name__}]")
+        return ToolMessage(
+            content="Error: the calculation server is unreachable right now.",
+            tool_call_id=request.tool_call["id"],
+            name=request.tool_call["name"],
+            status="error",
+        )
+
+
+def build_agent(llm, mcp_tools, memory):
+    return create_agent(llm, tools=mcp_tools + [history, save_report], system_prompt=SYSTEM_PROMPT,
+                        checkpointer=memory, middleware=[survive_tool_errors])
 
 
 async def list_threads(memory):
@@ -154,10 +185,9 @@ async def run_command(cmd, agent, memory, thread):
 
 
 async def main():
-    tools = await load_mcp_tools()
+    tools = await safe_load_tools()
     async with AsyncSqliteSaver.from_conn_string(DB_PATH) as memory:
-        agent = create_agent(model, tools=tools + [save_report],
-                             system_prompt=SYSTEM_PROMPT, checkpointer=memory)
+        agent = build_agent(model, tools, memory)
         thread = await ask_name(memory)
         print(f"Hi {thread}! Commands: /switch /history /forget, or 'exit'.")
         while True:
@@ -172,7 +202,10 @@ async def main():
                 print("Agent:", msg)
                 continue
             # only the NEW message is sent; the checkpointer loads the rest of this thread
-            await stream_reply(agent, user_input, thread)
+            try:
+                await stream_reply(agent, user_input, thread)
+            except Exception as e:  # server, network or model failure: never crash the chat
+                print(f"\nAgent: Something failed ({type(e).__name__}). Try again, or use /history, /switch, /forget.")
 
 
 if __name__ == "__main__":
