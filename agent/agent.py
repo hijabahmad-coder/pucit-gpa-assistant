@@ -105,6 +105,37 @@ async def show_history(agent, thread):
         print("(no saved messages yet)")
 
 
+def _plain(content):
+    """Tool results can arrive as a list of content blocks; show just the text."""
+    if isinstance(content, list):
+        return " ".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in content)
+    return str(content)
+
+
+async def stream_reply(agent, user_input, thread):
+    """Print the answer token by token, plus a line for every tool call and result."""
+    inputs = {"messages": [HumanMessage(user_input)]}
+    typing = False
+    async for chunk in agent.astream(inputs, make_config(thread),
+                                     stream_mode=["updates", "messages"], version="v2"):
+        if chunk["type"] == "messages":
+            token, meta = chunk["data"]
+            if meta.get("langgraph_node") == "model" and token.text:
+                if not typing:
+                    print("Agent: ", end="")
+                    typing = True
+                print(token.text, end="", flush=True)
+        elif chunk["type"] == "updates":
+            for update in chunk["data"].values():
+                for m in (update or {}).get("messages", []):
+                    for call in getattr(m, "tool_calls", None) or []:
+                        print(f"\n  [calling {call['name']} {call['args']}]")
+                        typing = False
+                    if m.type == "tool":
+                        print(f"  [result: {_plain(m.content)}]")
+    print()
+
+
 async def run_command(cmd, agent, memory, thread):
     """Handles /switch, /history, /forget. Returns the (possibly new) thread id."""
     if cmd == "/switch":
@@ -141,8 +172,7 @@ async def main():
                 print("Agent:", msg)
                 continue
             # only the NEW message is sent; the checkpointer loads the rest of this thread
-            result = await agent.ainvoke({"messages": [HumanMessage(user_input)]}, make_config(thread))
-            print("Agent:", result["messages"][-1].text)
+            await stream_reply(agent, user_input, thread)
 
 
 if __name__ == "__main__":
