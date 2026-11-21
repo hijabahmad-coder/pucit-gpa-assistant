@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain.mcp import MCPAdapter
 from langchain_core.messages import HumanMessage
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from guards import check_input
 from llm import model
@@ -13,6 +14,7 @@ from local_tools import save_report
 
 load_dotenv()
 MCP_URL = os.getenv("MCP_URL", "http://127.0.0.1:8000/mcp")
+DB_PATH = os.getenv("CHATS_DB", "chats.db")
 MCP_KEY = os.getenv("MCP_KEY")  # only needed if the hosted server asks for a key
 
 SYSTEM_PROMPT = """You are a GPA and CGPA assistant for a PUCIT BS(CS) student.
@@ -69,23 +71,43 @@ async def load_mcp_tools():
         return await adapter.list_tools()
 
 
+async def list_threads(memory):
+    """All thread_ids (usernames) that have a saved chat."""
+    seen = []
+    async for cp in memory.alist(None):
+        tid = cp.config["configurable"]["thread_id"]
+        if tid not in seen:
+            seen.append(tid)
+    return seen
+
+
+async def ask_name(memory):
+    threads = await list_threads(memory)
+    if threads:
+        print("Saved chats:", ", ".join(threads))
+    name = (await asyncio.to_thread(input, "Who is chatting? Your name is your chat id: ")).strip().lower()
+    return name or "guest"
+
+
 async def main():
     tools = await load_mcp_tools()
-    agent = create_agent(model, tools=tools + [save_report], system_prompt=SYSTEM_PROMPT)
-    messages = []
-    print("GPA assistant ready. Type 'exit' to quit.")
-    while True:
-        user_input = await asyncio.to_thread(input, "You: ")
-        if user_input.strip().lower() in ("exit", "quit"):
-            break
-        ok, msg = check_input(user_input)
-        if not ok:
-            print("Agent:", msg)
-            continue
-        messages.append(HumanMessage(content=user_input))
-        result = await agent.ainvoke({"messages": messages}, config={"recursion_limit": 15})
-        messages = result["messages"]
-        print("Agent:", messages[-1].text)
+    async with AsyncSqliteSaver.from_conn_string(DB_PATH) as memory:
+        agent = create_agent(model, tools=tools + [save_report],
+                             system_prompt=SYSTEM_PROMPT, checkpointer=memory)
+        thread = await ask_name(memory)
+        config = {"configurable": {"thread_id": thread}, "recursion_limit": 15}
+        print(f"Hi {thread}! Type 'exit' to quit.")
+        while True:
+            user_input = await asyncio.to_thread(input, f"{thread}: ")
+            if user_input.strip().lower() in ("exit", "quit"):
+                break
+            ok, msg = check_input(user_input)
+            if not ok:
+                print("Agent:", msg)
+                continue
+            # only the NEW message is sent; the checkpointer loads the rest of this thread
+            result = await agent.ainvoke({"messages": [HumanMessage(user_input)]}, config)
+            print("Agent:", result["messages"][-1].text)
 
 
 if __name__ == "__main__":
