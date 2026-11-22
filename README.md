@@ -5,7 +5,7 @@ All numbers come from plain-Python tools, served by **our own MCP server**. The 
 
 > Unofficial student project, not affiliated with PUCIT. Verify the grade scale and course list against the official policy.
 
-**MCP server URL:** `https://YOUR-SERVICE.onrender.com/mcp`  *(fill in after deploying; no API key needed unless noted here)*
+**MCP server URL:** `hhttps://cgpa-guide.fastmcp.app/mcp`  *(fill in after deploying; no API key needed unless noted here)*
 
 ## What changed from the first version
 
@@ -48,8 +48,8 @@ Chat commands: `/switch` (change user), `/history` (show saved chat), `/forget` 
 ## Deploy the server (Task 5)
 
 1. Push this repo to GitHub. On Render: New > Blueprint > pick the repo (uses `render.yaml`).
-2. Copy the service URL, check it: `fastmcp list https://YOUR-SERVICE.onrender.com/mcp`
-3. In `agent/.env` set `MCP_URL=https://YOUR-SERVICE.onrender.com/mcp` (add `MCP_KEY` only if your host needs auth).
+2. Copy the service URL, check it: `fastmcp list https://cgpa-guide.fastmcp.app/mcp`
+3. In `agent/.env` set `https://cgpa-guide.fastmcp.app/mcp` 
 
 Free Render services sleep when idle, so the first request can take about a minute.
 
